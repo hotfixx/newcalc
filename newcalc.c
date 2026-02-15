@@ -268,6 +268,7 @@ int main()
 
     while (fgets(infix_expr, MAX, stdin) != NULL)
     {
+        stack_ptr = stack;
         tokens_infix = tokenize(infix_expr);
         tokens_postfix = parse(tokens_infix);
         if (tokens_postfix == NULL)
