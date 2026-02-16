@@ -3,7 +3,7 @@
 
 #define MAX 256
 
-enum Type {INTEGER=1, PLUS=43, MINUS=45, MUL=42, DIV=47, OPENPAR=40, CLOSPAR=41};
+enum Type {INTEGER, OPERATOR, OPENPAR='(', CLOSPAR=')', PLUS='+', MINUS='-', MUL='*', DIV='/', TOKEN_END=-1};
 
 char error;
 
@@ -33,9 +33,9 @@ int pop()
 char operatorsinstack(int* stack_base_ptr)
 {
     int* p = stack_ptr;
-    for (; p >= stack_base_ptr; p++)
+    for (; p >= stack_base_ptr; p--)
     {
-        if (*p >= MUL && *p <= DIV)
+        if (*p >= PLUS && *p <= DIV)
             return 1;
     }
     return 0;
@@ -53,11 +53,11 @@ char priority(char op)
     }
 }
 
-char findlen(Token* tokens)
+char findlen(Token* tokens_infix_ptr)
 {
     char numtokens = 0;
-    Token* p = tokens;
-    for (; p->value != -1; p++)
+    Token* p = tokens_infix_ptr;
+    for (; p->Type != TOKEN_END; p++)
         numtokens++;
     return numtokens;
 }
@@ -65,7 +65,7 @@ char findlen(Token* tokens)
 Token* tokenize(char* infix_expr)
 {
     static Token tokens_infix[MAX] = {0};
-    Token* tokens = tokens_infix;
+    Token* tokens_infix_ptr = tokens_infix;
 
     for (int i = 0; i < MAX; i++) 
     {
@@ -85,64 +85,44 @@ Token* tokenize(char* infix_expr)
         switch (*infix_expr)
         {
             case '+':
-                tokens->Type = PLUS;
-                tokens->value = '+';
-                infix_expr++;
-                tokens++;
-                break;
-
             case '-':
-                tokens->Type = MINUS;
-                tokens->value = '-';
-                infix_expr++;
-                tokens++;
-                break;
-
             case '*':
-                tokens->Type = MUL;
-                tokens->value = '*';
-                infix_expr++;
-                tokens++;
-                break;
-
             case '/':
-                tokens->Type = DIV;
-                tokens->value = '/';
+                tokens_infix_ptr->Type = OPERATOR;
+                tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
-                tokens++;
+                tokens_infix_ptr++;
                 break;
-
             case '(':
-                tokens->Type = OPENPAR;
-                tokens->value = '(';
+                tokens_infix_ptr->Type = OPENPAR;
+                tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
-                tokens++;
+                tokens_infix_ptr++;
                 break;
-
             case ')':
-                tokens->Type = CLOSPAR;
-                tokens->value = ')';
+                tokens_infix_ptr->Type = CLOSPAR;
+                tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
-                tokens++;
+                tokens_infix_ptr++;
                 break;
 
             default:
                 if (*infix_expr >= '0' && *infix_expr <= '9')
                 {
-                    tokens->Type = INTEGER;
-                    tokens->value = 0;
+                    tokens_infix_ptr->Type = INTEGER;
+                    tokens_infix_ptr->value = 0;
 
                     while (*infix_expr >= '0' && *infix_expr <= '9')
                     {
-                        tokens->value = (tokens->value * 10) + ((*infix_expr) - '0');
+                        tokens_infix_ptr->value = (tokens_infix_ptr->value * 10) + ((*infix_expr) - '0');
                         infix_expr++;
                     }
-                    tokens++;
+                    tokens_infix_ptr++;
                 }
                 break;
         }
     }
-    tokens->value = -1; // end
+    tokens_infix_ptr->Type = TOKEN_END; // end
     char numtokens;
     if ((numtokens = findlen(tokens_infix)) == 0)
     {
@@ -165,7 +145,7 @@ Token* parse(Token* tokens_infix_ptr)
         tokens_postfix[i].value = 0;
     }
 
-    while (tokens_infix_ptr->value != -1)
+    while (tokens_infix_ptr->Type != TOKEN_END)
     {
         if (tokens_infix_ptr->Type == INTEGER)
         {
@@ -175,12 +155,11 @@ Token* parse(Token* tokens_infix_ptr)
             tokens_postfix_ptr++;
             continue;
         }
-        if (tokens_infix_ptr->Type >= MUL && tokens_infix_ptr->Type <= DIV && 
-            tokens_infix_ptr->Type != OPENPAR && tokens_infix_ptr ->Type != CLOSPAR)
+        if (tokens_infix_ptr->Type == OPERATOR)
         {
-            while (priority(*stack_ptr) != 0 && priority(*stack_ptr) >= priority(tokens_infix_ptr->Type))
+            while (priority(*stack_ptr) != 0 && priority(*stack_ptr) >= priority(tokens_infix_ptr->value))
             {
-                tokens_postfix_ptr->Type = *stack_ptr;
+                tokens_postfix_ptr->Type = OPERATOR;
                 tokens_postfix_ptr->value = pop();
                 tokens_postfix_ptr++;
             }
@@ -200,7 +179,7 @@ Token* parse(Token* tokens_infix_ptr)
         {
             while (*stack_ptr != OPENPAR)
             {
-                tokens_postfix_ptr->Type = *stack_ptr;
+                tokens_postfix_ptr->Type = OPERATOR;
                 tokens_postfix_ptr->value = pop();
                 tokens_postfix_ptr++;
                 if (stack_ptr == stack_base_ptr)
@@ -216,7 +195,7 @@ Token* parse(Token* tokens_infix_ptr)
     }
     while (operatorsinstack(stack_base_ptr))
     {
-        if (*stack_ptr == '(')
+        if (*stack_ptr == OPENPAR)
         {
             error = 1;
             return NULL;
@@ -224,63 +203,53 @@ Token* parse(Token* tokens_infix_ptr)
         tokens_postfix_ptr->value = pop();
         switch (tokens_postfix_ptr->value)
         {
-            case '+': tokens_postfix_ptr->Type = PLUS; break;
-            case '-': tokens_postfix_ptr->Type = MINUS; break;
-            case '*': tokens_postfix_ptr->Type = MUL; break;
-            case '/': tokens_postfix_ptr->Type = DIV; break;
+            case '+':
+            case '-':
+            case '*':
+            case '/': tokens_postfix_ptr->Type = OPERATOR; break;
         }
         tokens_postfix_ptr++;
     }
-    tokens_postfix_ptr->value = -1;
+    tokens_postfix_ptr->Type = TOKEN_END;
     return tokens_postfix;
 }
 
 int evaluate(Token* tokens_postfix_ptr)
 {
-    int right = 0;
-    int left = 0;
     int result = 0;
-    while (tokens_postfix_ptr->value != -1)
+    while (tokens_postfix_ptr->Type != TOKEN_END)
     {
         switch (tokens_postfix_ptr->Type)
         {
             case INTEGER:
                 push(tokens_postfix_ptr->value);
                 break;
-            case PLUS:
+            
+            case OPERATOR:
             {
                 int right = pop();
                 int left = pop();
-                result = left + right;
-                push(result);
-                break;
-            }
-            case MINUS:
-            {
-                int right = pop();
-                int left = pop();
-                result = left - right;
-                push(result);
-                break;
-            }
-            case MUL:
-            {
-                int right = pop();
-                int left = pop();
-                result = left * right;
-                push(result);
-                break;
-            }
-            case DIV:
-            {
-                int right = pop();
-                int left = pop();
-                if (right == 0)
+        
+                switch (tokens_postfix_ptr->value)
                 {
-                    error = 1;
-                    return result;
+                    case '+':
+                        result = left + right;
+                        break;
+                    case '-':
+                        result = left - right;
+                        break;
+                    case '*':
+                        result = left * right;
+                        break;
+                    case '/':
+                        if (right == 0)
+                        {
+                            error = 1;
+                            return result;
+                        }
+                        result = left / right;
+                        break;
                 }
-                result = left / right;
                 push(result);
                 break;
             }
