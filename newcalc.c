@@ -3,7 +3,7 @@
 
 #define MAX 256
 
-enum Type {INTEGER, OPERATOR, OPENPAR='(', CLOSPAR=')', PLUS='+', MINUS='-', MUL='*', DIV='/', TOKEN_END=-1};
+enum Type {INTEGER, OPERATOR, OPENPAR='(', CLOSPAR=')', TOKEN_END=-1};
 
 char error;
 
@@ -33,9 +33,9 @@ int pop()
 char operatorsinstack(int* stack_base_ptr)
 {
     int* p = stack_ptr;
-    for (; p >= stack_base_ptr; p--)
+    for (; p != stack_base_ptr; p--)
     {
-        if (*p >= PLUS && *p <= DIV)
+        if (*p == '+' || *p == '-' || *p == '*' || *p == '/') 
             return 1;
     }
     return 0;
