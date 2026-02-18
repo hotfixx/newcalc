@@ -62,7 +62,7 @@ char findlen(Token* tokens_ptr)
         numtokens++;
     return numtokens;
 }
-
+// tokenize the input string, make operator tokens, parenthesis tokens and number tokens.
 int tokenize(char* infix_expr, Token* tokens_infix_ptr)
 {
     Token* tokens_infix_base_ptr = tokens_infix_ptr;
@@ -126,7 +126,7 @@ int tokenize(char* infix_expr, Token* tokens_infix_ptr)
     }
     return 0;
 }
-// Shunting yard algorithm
+// Shunting yard algorithm. Convert infix notation expression into postfix notation expression, for example 3 + 4 -> 3 4 +
 int parse(Token* tokens_infix_ptr, Token* tokens_postfix_ptr)
 {
     while (tokens_infix_ptr->tokentype != TOKEN_END)
