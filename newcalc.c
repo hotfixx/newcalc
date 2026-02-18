@@ -126,7 +126,7 @@ int tokenize(char* infix_expr, Token* tokens_infix_ptr)
     }
     return 0;
 }
-
+// Shunting yard algorithm
 int parse(Token* tokens_infix_ptr, Token* tokens_postfix_ptr)
 {
     while (tokens_infix_ptr->tokentype != TOKEN_END)
