@@ -3,18 +3,19 @@
 
 #define MAX 256
 
-enum Type {INTEGER, OPERATOR, OPENPAR='(', CLOSPAR=')', TOKEN_END=-1};
+enum ErrorCode {ERR_DIVBYZERO=-3, ERR_MISPAREN, ERR_BADEXPR};
 
-char error;
+enum Type {INTEGER=1, OPERATOR, OPENPAR='(', CLOSPAR=')', TOKEN_END=-1};
 
 typedef struct
 {
-    char Type;
+    enum Type tokentype;
     int value;
 } Token;
 
 int stack[MAX] = {0};
 int* stack_ptr = stack;
+int* stack_base_ptr = stack;
 
 void push(int op)
 {
@@ -30,7 +31,7 @@ int pop()
     return op;
 }
 
-char operatorsinstack(int* stack_base_ptr)
+char operatorsinstack()
 {
     int* p = stack_ptr;
     for (; p != stack_base_ptr; p--)
@@ -53,25 +54,18 @@ char priority(char op)
     }
 }
 
-char findlen(Token* tokens_infix_ptr)
+char findlen(Token* tokens_ptr)
 {
     char numtokens = 0;
-    Token* p = tokens_infix_ptr;
-    for (; p->Type != TOKEN_END; p++)
+    Token* p = tokens_ptr;
+    for (; p->tokentype != TOKEN_END; p++)
         numtokens++;
     return numtokens;
 }
 
-Token* tokenize(char* infix_expr)
+int tokenize(char* infix_expr, Token* tokens_infix_ptr)
 {
-    static Token tokens_infix[MAX] = {0};
-    Token* tokens_infix_ptr = tokens_infix;
-
-    for (int i = 0; i < MAX; i++) 
-    {
-        tokens_infix[i].Type = 0;
-        tokens_infix[i].value = 0;
-    }
+    Token* tokens_infix_base_ptr = tokens_infix_ptr;
 
     while (*infix_expr != '\n')
     {
@@ -88,19 +82,19 @@ Token* tokenize(char* infix_expr)
             case '-':
             case '*':
             case '/':
-                tokens_infix_ptr->Type = OPERATOR;
+                tokens_infix_ptr->tokentype = OPERATOR;
                 tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
                 tokens_infix_ptr++;
                 break;
             case '(':
-                tokens_infix_ptr->Type = OPENPAR;
+                tokens_infix_ptr->tokentype = OPENPAR;
                 tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
                 tokens_infix_ptr++;
                 break;
             case ')':
-                tokens_infix_ptr->Type = CLOSPAR;
+                tokens_infix_ptr->tokentype = CLOSPAR;
                 tokens_infix_ptr->value = *infix_expr;
                 infix_expr++;
                 tokens_infix_ptr++;
@@ -109,7 +103,7 @@ Token* tokenize(char* infix_expr)
             default:
                 if (*infix_expr >= '0' && *infix_expr <= '9')
                 {
-                    tokens_infix_ptr->Type = INTEGER;
+                    tokens_infix_ptr->tokentype = INTEGER;
                     tokens_infix_ptr->value = 0;
 
                     while (*infix_expr >= '0' && *infix_expr <= '9')
@@ -122,44 +116,34 @@ Token* tokenize(char* infix_expr)
                 break;
         }
     }
-    tokens_infix_ptr->Type = TOKEN_END; // end
+    tokens_infix_ptr->tokentype = TOKEN_END; // end
+
     char numtokens;
-    if ((numtokens = findlen(tokens_infix)) == 0)
+    if ((numtokens = findlen(tokens_infix_base_ptr)) == 0)
     {
-        error = 1;
-        return NULL;
+        printf("Illegal symbols in the expression\n");
+        return ERR_BADEXPR;
     }
-    return tokens_infix;
+    return 0;
 }
 
-Token* parse(Token* tokens_infix_ptr)
+int parse(Token* tokens_infix_ptr, Token* tokens_postfix_ptr)
 {
-    static Token tokens_postfix[MAX] = {0};
-    Token* tokens_postfix_ptr = tokens_postfix;
-
-    int* stack_base_ptr = stack_ptr;
-
-    for (int i = 0; i < MAX; i++) 
+    while (tokens_infix_ptr->tokentype != TOKEN_END)
     {
-        tokens_postfix[i].Type = 0;
-        tokens_postfix[i].value = 0;
-    }
-
-    while (tokens_infix_ptr->Type != TOKEN_END)
-    {
-        if (tokens_infix_ptr->Type == INTEGER)
+        if (tokens_infix_ptr->tokentype == INTEGER)
         {
-            tokens_postfix_ptr->Type = INTEGER;
+            tokens_postfix_ptr->tokentype = INTEGER;
             tokens_postfix_ptr->value = tokens_infix_ptr->value;
             tokens_infix_ptr++;
             tokens_postfix_ptr++;
             continue;
         }
-        if (tokens_infix_ptr->Type == OPERATOR)
+        if (tokens_infix_ptr->tokentype == OPERATOR)
         {
             while (priority(*stack_ptr) != 0 && priority(*stack_ptr) >= priority(tokens_infix_ptr->value))
             {
-                tokens_postfix_ptr->Type = OPERATOR;
+                tokens_postfix_ptr->tokentype = OPERATOR;
                 tokens_postfix_ptr->value = pop();
                 tokens_postfix_ptr++;
             }
@@ -168,24 +152,24 @@ Token* parse(Token* tokens_infix_ptr)
             continue;
         }
 
-        if (tokens_infix_ptr->Type == OPENPAR)
+        if (tokens_infix_ptr->tokentype == OPENPAR)
         {
             push(tokens_infix_ptr->value);
             tokens_infix_ptr++;
             continue;
         }
 
-        if (tokens_infix_ptr->Type == CLOSPAR)
+        if (tokens_infix_ptr->tokentype == CLOSPAR)
         {
             while (*stack_ptr != OPENPAR)
             {
-                tokens_postfix_ptr->Type = OPERATOR;
+                tokens_postfix_ptr->tokentype = OPERATOR;
                 tokens_postfix_ptr->value = pop();
                 tokens_postfix_ptr++;
                 if (stack_ptr == stack_base_ptr)
                 {
-                    error = 1;
-                    return NULL;
+                    printf("Missing parenthesis\n");
+                    return ERR_MISPAREN;
                 }
             }
             pop();
@@ -193,12 +177,12 @@ Token* parse(Token* tokens_infix_ptr)
             continue;
         }
     }
-    while (operatorsinstack(stack_base_ptr))
+    while (operatorsinstack())
     {
         if (*stack_ptr == OPENPAR)
         {
-            error = 1;
-            return NULL;
+            printf("Missing parenthesis\n");
+            return ERR_MISPAREN;
         }
         tokens_postfix_ptr->value = pop();
         switch (tokens_postfix_ptr->value)
@@ -206,20 +190,19 @@ Token* parse(Token* tokens_infix_ptr)
             case '+':
             case '-':
             case '*':
-            case '/': tokens_postfix_ptr->Type = OPERATOR; break;
+            case '/': tokens_postfix_ptr->tokentype = OPERATOR; break;
         }
         tokens_postfix_ptr++;
     }
-    tokens_postfix_ptr->Type = TOKEN_END;
-    return tokens_postfix;
+    tokens_postfix_ptr->tokentype = TOKEN_END;
+    return 0;
 }
 
-int evaluate(Token* tokens_postfix_ptr)
+int evaluate(Token* tokens_postfix_ptr, int* result)
 {
-    int result = 0;
-    while (tokens_postfix_ptr->Type != TOKEN_END)
+    while (tokens_postfix_ptr->tokentype != TOKEN_END)
     {
-        switch (tokens_postfix_ptr->Type)
+        switch (tokens_postfix_ptr->tokentype)
         {
             case INTEGER:
                 push(tokens_postfix_ptr->value);
@@ -232,73 +215,59 @@ int evaluate(Token* tokens_postfix_ptr)
         
                 switch (tokens_postfix_ptr->value)
                 {
-                    case '+':
-                        result = left + right;
-                        break;
-                    case '-':
-                        result = left - right;
-                        break;
-                    case '*':
-                        result = left * right;
-                        break;
+                    case '+': *result = left + right; break;
+                    case '-': *result = left - right; break;
+                    case '*': *result = left * right; break;
                     case '/':
                         if (right == 0)
                         {
-                            error = 1;
-                            return result;
+                            printf("Division by zero\n");
+                            return ERR_DIVBYZERO;
                         }
-                        result = left / right;
+                        *result = left / right;
                         break;
                 }
-                push(result);
+                push(*result);
                 break;
             }
         }
         tokens_postfix_ptr++;
     }
-    result = pop();
-    return result;
+    *result = pop();
+    return 0;
+}
+
+static inline void clear_infix_expr(char* infix_expr_ptr)
+{
+    for (; *infix_expr_ptr != '\0'; infix_expr_ptr++) *infix_expr_ptr = 0;
 }
 
 int main()
 {
     char infix_expr[MAX] = {0};
-    Token* tokens_infix;
-    Token* tokens_postfix;
-    int result;
 
     while (fgets(infix_expr, MAX, stdin) != NULL)
     {
-        stack_ptr = stack;
-        error = 0;
+        Token tokens_infix[MAX] = {0};
+        Token tokens_postfix[MAX] = {0};
+        int result;
+
         if (infix_expr[0] == '\n')
         {
             printf("Empty expression\n");
             continue;
         }
 
-        tokens_infix = tokenize(infix_expr);
-        if (error)
-        {
-            printf("Illegal symbols in the expression\n");
-            continue;
-        }
+        if (tokenize(infix_expr, tokens_infix)) continue;
 
-        tokens_postfix = parse(tokens_infix);
-        if (error)
-        {
-            printf("Missing parenthesis\n");
-            continue;
-        }
+        if (parse(tokens_infix, tokens_postfix)) continue;
 
-        result = evaluate(tokens_postfix);
-        if (error)
-        {
-            printf("Division by zero\n");
-            continue;
-        }
+        if (evaluate(tokens_postfix, &result)) continue;
 
         printf("%d\n", result);
+
+        clear_infix_expr(infix_expr);
+        stack_ptr = stack;
     }
 
     return 0;
